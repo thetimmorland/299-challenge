@@ -81,8 +81,8 @@ class Robot {
 
   state_t state = SEARCH;
 
-  // this function should be called as often as possible, returns distance
-  // traveled, assuming the robot drove in a straight line
+  // return distance travelled since function was last called, and update
+  // absolute position variables
   float recalcPosition() {
     static int lastMillis = 0;
     int thisMillis = millis();
@@ -91,11 +91,24 @@ class Robot {
     xPos += delta * cos(heading);
     yPos += delta * sin(heading);
 
+    lastMillis = thisMillis;
+    return delta;
+  }
+
+  // return change in heading since last function was last called, and update
+  // abosulute heading variable
+  float recalcHeading() {
+    static int lastMillis = 0;
+    int thisMillis = millis();
+
     // calculation for heading change Page 72 of Elements of Robotics
     // https://doi.org/10.1007/978-3-319-62533-1
-    heading += (rightMotor.getVelocity() - leftMotor.getVelocity())
+    float headingDelta = (rightMotor.getVelocity() - leftMotor.getVelocity())
       * (thisMillis - lastMillis) / 1000 / robotBaseline;
+    heading += headingDelta;
+
     lastMillis = thisMillis;
+    return headingDelta;
   }
 
   int approxEqual(float a, float b, float tolerance) {
@@ -103,27 +116,37 @@ class Robot {
   }
 
  public:
-  int startButtonPushed() { return !digitalRead(startButtonPin); }
   state_t getState() { return state; }
+  float getXPos() { return xPos; }
+  float getYPos() { return yPos; }
+  float getHeading() { return heading; }
+
+  int startButtonPushed() { return !digitalRead(startButtonPin); }
+
   void rightMotorISR() { rightMotor.isr(); }
   void leftMotorISR() { leftMotor.isr(); }
+  void bumperISR() {}
+  void IRSensorISR() {}
 
   // positive values turn clockwise, negative values turn counter-clockwise
-  void turn(float radians) {
-    float targetHeading = heading + radians;
-    while(!approxEqual(heading, targetHeading, 0.1)) {
-      const int power = kpHeading * (targetHeading - heading);
+  void turn(float radiansToTurn) {
+    float radiansTurned = 0;
+    while(!approxEqual(radiansToTurn, radiansTurned, angleTolerance)) {
+      const int power = kpHeading * (radiansToTurn - radiansTurned);
       rightMotor.setPower(power);
-      leftMotor.setPower(power);
-      recalcPosition();
+      leftMotor.setPower(-power);
+      radiansTurned += recalcHeading();
     }
   };
 
   // positive values drive forwards, negative values drive backwards
-  void driveForward(float distance) {
+  void drive(float distanceToDrive) {
+    float distanceDriven = 0;
+    while(!approxEqual(distanceToDrive, distanceDriven, positionTolerance)) {
+      const int power = kpPosition * (distanceToDrive - distanceDriven);
+      distanceDriven += recalcPosition();
+    }
   };
-
-
 };
 
 //
@@ -131,6 +154,9 @@ class Robot {
 //
 
 Robot robot = Robot();
+
+// this wrapper around the ISR is required to match the function signature
+// accepted by attachInterupt
 void rightMotorISR() { robot.rightMotorISR(); }
 void leftMotorISR() { robot.rightMotorISR(); }
 
@@ -146,14 +172,6 @@ void setup() {
 }
 
 void loop() {
-  switch(robot.getState()) {
-  case SEARCH:
-    break;
-  case WAIT:
-    break;
-  case AT_HOME:
-    break;
-  case GO_HOME:
-    break;
-  }
+  robot.drive(1); // drive 1m forwards
+  robot.turn(M_PI); // turn pi radians;
 }
