@@ -56,7 +56,7 @@ class Motor {
       digitalWrite(directionPin, LOW);
     }
 
-    analogWrite(powerPin, power * direction);
+    analogWrite(powerPin, power);
   };
 
   float getVelocity() {
